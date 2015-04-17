@@ -202,7 +202,7 @@ classdef ImageProcessing < handle
           catheder_BWmask=imdilate(catheder_BWmask,se);
           cImage(catheder_BWmask) = .0;
           setOriginalImage(f, cImage);
-          f.setScale(catheder_radius);
+          f.setScale(catheder_radius*2/0.9);
 
        end
   end%/ImageProcessing
@@ -263,19 +263,18 @@ classdef ImageProcessing < handle
   [Nrows,Ncols]=size(OCTImagerotated);
   IIrot=OCTImagerotated(Nrows/2+1:end,:);
 
-   BWcartbone=false([Nrows/2,Ncols]);
-   %For some reason sub2ind does not work
-   %TODO Fix plz
-   BWcartbone(sub2ind([Nrows/2,Ncols],sub_cartbone(:,1),sub_cartbone(:,2)))=true;
+%    BWcartbone=false([Nrows/2,Ncols]);
+%    BWcartbone(sub2ind([Nrows/2,Ncols],sub_cartbone(:,1),sub_cartbone(:,2)))=true;
+%    %sub2ind([1024, 2048], [1005,1], [1005,1])
 
    BWcartsurf=false([Nrows/2,Ncols]);
    BWcartsurf(sub2ind([Nrows/2,Ncols],sub_cartsurf(:,1),sub_cartsurf(:,2)))=true;
 
-   BWcartsurf_smooth=false([Nrows/2,Ncols]);
-   BWcartsurf_smooth(sub2ind([Nrows/2,Ncols],sub_cartsurf_smoothed(:,1),sub_cartsurf_smoothed(:,2)))=true;
-
-   BWmiddlecart=false([Nrows/2,Ncols]);
-   BWmiddlecart(sub2ind([Nrows/2,Ncols],sub_middlecart(:,1),sub_middlecart(:,2)))=true;
+%    BWcartsurf_smooth=false([Nrows/2,Ncols]);
+%    BWcartsurf_smooth(sub2ind([Nrows/2,Ncols],sub_cartsurf_smoothed(:,1),sub_cartsurf_smoothed(:,2)))=true;
+% 
+%    BWmiddlecart=false([Nrows/2,Ncols]);
+%    BWmiddlecart(sub2ind([Nrows/2,Ncols],sub_middlecart(:,1),sub_middlecart(:,2)))=true;
         
 
         end%/EnhanceImage
