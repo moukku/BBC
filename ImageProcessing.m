@@ -39,7 +39,7 @@
 %##########################################################################
 
 
-classdef testImageProcessingTytti < handle
+classdef ImageProcessing < handle
 
     properties(GetAccess = 'private', SetAccess = 'private')
     Image;
@@ -71,7 +71,7 @@ classdef testImageProcessingTytti < handle
         
 
                 
-        function f = testImageProcessingTytti(cImage)
+        function f = ImageProcessing(cImage)
    
             %Check if the variables actually exist.
             if(exist('cImage','var'))
@@ -263,8 +263,9 @@ classdef testImageProcessingTytti < handle
   [Nrows,Ncols]=size(OCTImagerotated);
   IIrot=OCTImagerotated(Nrows/2+1:end,:);
 
-  
    BWcartbone=false([Nrows/2,Ncols]);
+   %For some reason sub2ind does not work
+   %TODO Fix plz
    BWcartbone(sub2ind([Nrows/2,Ncols],sub_cartbone(:,1),sub_cartbone(:,2)))=true;
 
    BWcartsurf=false([Nrows/2,Ncols]);
