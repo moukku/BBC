@@ -156,7 +156,7 @@ if(limit > 0)
             %filename = listing(ii).name;
         %Create class intance
 
-        oMain = testImageProcessingTytti(Image);
+        oMain = ImageProcessing(Image);
 
         %Align image
         Image = oMain.alignCartilageHorizontally();
