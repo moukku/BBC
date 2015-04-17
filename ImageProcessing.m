@@ -211,8 +211,7 @@ classdef ImageProcessing < handle
 %-------------------------------------------------------------EnhanceImage#
 
         
-        function [BWcartbone, BWcartsurf, BWcartsurf_smooth, BWmiddlecart]...
-                = EnhanceImage(obj, OCTImagerotated)
+        function [BWcartedge, BWcartsurf] = EnhanceImage(obj, OCTImagerotated)
         %Arguments:         -Instance
         %Returns:           -Enhanced Image
         %Summary:
@@ -257,29 +256,11 @@ classdef ImageProcessing < handle
   %Size of second half of the image
   
   catheder_radius = obj.getScale();
-  [sub_cartsurf,sub_middlecart,sub_cartbone,sub_cartsurf_smoothed]=...
-    obj.segmentCartilageSurfaces(OCTImagerotated,catheder_radius);
+  [BWcartedge, BWcartsurf] = obj.segmentCartilageSurfaces(OCTImagerotated,catheder_radius);
   
-  [Nrows,Ncols]=size(OCTImagerotated);
-  IIrot=OCTImagerotated(Nrows/2+1:end,:);
-
-%    BWcartbone=false([Nrows/2,Ncols]);
-%    BWcartbone(sub2ind([Nrows/2,Ncols],sub_cartbone(:,1),sub_cartbone(:,2)))=true;
-%    %sub2ind([1024, 2048], [1005,1], [1005,1])
-
-   BWcartsurf=false([Nrows/2,Ncols]);
-   BWcartsurf(sub2ind([Nrows/2,Ncols],sub_cartsurf(:,1),sub_cartsurf(:,2)))=true;
-
-%    BWcartsurf_smooth=false([Nrows/2,Ncols]);
-%    BWcartsurf_smooth(sub2ind([Nrows/2,Ncols],sub_cartsurf_smoothed(:,1),sub_cartsurf_smoothed(:,2)))=true;
-% 
-%    BWmiddlecart=false([Nrows/2,Ncols]);
-%    BWmiddlecart(sub2ind([Nrows/2,Ncols],sub_middlecart(:,1),sub_middlecart(:,2)))=true;
-        
-
         end%/EnhanceImage
         
-   function [sub_cartsurf,sub_middlecart,sub_cartbone,sub_cartsurf_smoothed] = segmentCartilageSurfaces(obj, OCTImagerotated, catheder_radius)
+   function [BWcartedge, BWcartsurf] = segmentCartilageSurfaces(obj, OCTImagerotated, catheder_radius)
         %segmentCartilageSurfaces - Segments the cartilage surface, meanlayer and cartilage-bone interface
         %  [sub_cartsurf,sub_middlecart,sub_cartbone,sub_cartsurf_smoothed,meancartthick]=...
         %    segmentCartilageSurfaces(OCTImagerotated,catheder_radius);
@@ -300,12 +281,12 @@ classdef ImageProcessing < handle
         %
 
         [Nrows,Ncols]=size(OCTImagerotated);
-        middle_row=round(Nrows/2);
+        %middle_row=round(Nrows/2);
 
 
         %Cartilage is in the lower half of the image. Therefore it is enough to
         %work only with the lower half.
-        IIrot=OCTImagerotated(middle_row+1:end,:);
+        IIrot=OCTImagerotated;
 
 
         %Filter image with a strong horizontal filter
@@ -443,6 +424,10 @@ classdef ImageProcessing < handle
 
         %Return full average cartilage thickness, since it is clearer to understand
         meancartthick=meanhalfcartthick*2;
+        
+        BWcartsurf=false([Nrows,Ncols]);
+        BWcartsurf(sub2ind([Nrows,Ncols],sub_cartsurf(:,1),sub_cartsurf(:,2)))=true;
+        
         end
         
         
@@ -598,7 +583,7 @@ classdef ImageProcessing < handle
                 [width depth] = size(cImage2);
                 obj.setXnY(width, depth);
                 
-                [~, y] = find(edge(test, 'canny'));
+                %[~, y] = find(edge(test, 'canny'));
                 [~, Iy] = size(cImage2);
 
                 cImage2(:,1:round(Iy*0.3)) =0;
@@ -623,7 +608,7 @@ classdef ImageProcessing < handle
                 position(3) = width * 1.1;
                 
                 %Crop the image
-                cImage = imcrop(obj.getOriginalImage(), position);
+                cImage = imcrop(test, position);
                 
                 %Set class variable
                 obj.setPosition(position);
