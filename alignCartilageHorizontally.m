@@ -10,6 +10,16 @@ function [OCTImagerotated,cartilage_angle,varargout]=alignCartilageHorizontally(
 %  Catheder can also be removed beforehand. Intensity in the center
 %  of the image must then be zero.
 
+%  [OCTImagerotated,cartilage_angle,PointOnCartilage]=alignCartilageHorizontally(...)
+%  Returns a point on the cartilage. This has usually been given by user.
+
+%  [OCTImagerotated,cartilage_angle]=alignCartilageHorizontally(OCTImage,catheder_BWmask,PointOnCartilage)
+%  If point on cartilage is given then it is not asked from user
+
+%  [OCTImagerotated,cartilage_angle,PointOnCartilage,BWinitialcartilageRot]=alignCartilageHorizontally(...)
+%  Return that cartilage mask that user has pointed
+
+
 % Made by Sami Vaananen
 % 2015-2-9
 
@@ -41,24 +51,17 @@ function [OCTImagerotated,cartilage_angle,varargout]=alignCartilageHorizontally(
   %images I tested but it is not guaranteed that it works with all possible
   %cartilage OCT images.
   
-  trlevel= 0.14;%graythresh(IInocath);
+  %trlevel= 0.14;%graythresh(IInocath);
+  %BWinitialcartilage=im2bw(IInocath,trlevel);
   
-  
-  BWinitialcartilage=im2bw(IInocath,trlevel);
-  CC = bwconncomp(BWinitialcartilage);
-  stats=regionprops(CC,'Area','Orientation');
-  
-  areas=[stats.Area];
-  idx_maxarea=find(areas==max(areas),1);
-  
-  BWinitialcartilage=false(size(IInocath));
-  BWinitialcartilage(CC.PixelIdxList{idx_maxarea})=true;
-  
-  se=strel('arbitrary',true(5,5));
-  BWinitialcartilage=imclose(BWinitialcartilage,se);
-  
-  BWinitialcartilage=imfill(BWinitialcartilage,'holes');
-  %   imshow(BWinitcart)
+  %Ask from user which surface to pick
+  if nargin>2%Point on cartilage is given
+    [PointOnCartilage,BWinitialcartilage] = pickCartilage(IInocath,varargin{2});
+  else
+    [PointOnCartilage,BWinitialcartilage] = pickCartilage(IInocath);
+  end
+  varargout{2}=PointOnCartilage;
+  %   imshow(BWinitialcartilage)
 
   
   % Rotate cartilage horizontally
@@ -68,12 +71,23 @@ function [OCTImagerotated,cartilage_angle,varargout]=alignCartilageHorizontally(
   
   cartilage_angle=stats.Orientation;
   
+  %First,rotate mask and make sure it end up to bottom part of theimage
+  BWincartRot=imrotate(BWinitialcartilage,-cartilage_angle,'nearest','crop');
+  if sum(sum(BWincartRot(1:end/2,:)))>sum(sum(BWincartRot(end/2+1:end,:)))
+    %Cartilage is upside down
+    
+    cartilage_angle=cartilage_angle+180;
+    %imshow(BWincartRot)
+  end
   
   OCTImagerotated=imrotate(IInocath,-cartilage_angle,'bilinear','crop');
+  %imshow(OCTImagerotated)
+  BWincartRot=imrotate(BWinitialcartilage,-cartilage_angle,'nearest','crop');
+  varargout{3}=BWincartRot;
   
   %catheder_BWmask_rot can be returned only if catheder_BWmask has been
-  %given as input
-  if nargin>1
+  %given as input. Alsso, if it is not asked do not generate rotated image
+  if nargin>1 && nargout>2
     catheder_BWmask_rot=imrotate(catheder_BWmask,-cartilage_angle,'bilinear','crop');
     varargout{1} = catheder_BWmask_rot;
   end
