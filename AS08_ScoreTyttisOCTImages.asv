@@ -232,7 +232,7 @@ load('autoscore_debugdata_generaldataTytti.mat');
 %  -pathname, -filenames, -N_im, -setAreaOfInterestManually
 
 clear cellCartilageMeanLowerlayer
-
+saveImage = cell(N_im,1);
 for ii = 1:N_im
   
   disp(['ii = ',num2str(ii),' Initial segmentation of the cartilage, Process ',filenames{ii}])
@@ -261,6 +261,28 @@ for ii = 1:N_im
 
    BWcartsurf=false([Nrows/2,Ncols]);
    BWcartsurf(sub2ind([Nrows/2,Ncols],sub_cartsurf(:,1),sub_cartsurf(:,2)))=true;
+   
+   %
+   %
+   %CREATE MONTAGE
+   %
+   %
+   temp = IIrot + BWcartsurf;
+   if(ii == 1)
+        refImage = IIrot + BWcartsurf;
+   end
+     % Get size of reference image
+        [rowsA colsA numberOfColorChannelsA] = size(refImage); 
+        % Get size of existing image B. 
+        [rowsB colsB numberOfColorChannelsB] = size(temp); 
+        % See if lateral sizes match. 
+        if rowsB ~= rowsA || colsA ~= colsB 
+            % Size of B does not match A, so resize B to match A's size. 
+            temp = imresize(temp, [rowsA colsA]);
+        end
+   saveImage{ii} = temp;
+   
+   
 
    BWcartsurf_smooth=false([Nrows/2,Ncols]);
    BWcartsurf_smooth(sub2ind([Nrows/2,Ncols],sub_cartsurf_smoothed(:,1),sub_cartsurf_smoothed(:,2)))=true;
@@ -307,7 +329,9 @@ for ii = 1:N_im
      'sub_middlecart','sub_cartsurf_smoothed','meancartthick','sub_cartbone');
      end
   
-end  
+end
+  saveImage = cell2mat(saveImage);
+    imwrite(saveImage,'image.jpg');
 
 end
 %-- END FIND CARTILAGE SURFACES
@@ -346,6 +370,8 @@ for ii = 1:N_im
 
     pixelspermm=(catheder_radius*2/catheder_diameter_mm);
   [ORI,ResultImage]=calculateORI(IIrot,sub_cartsurf,pixelspermm);
+  
+  disp(ORI)
 
   
   ResultImage=imresize(ResultImage,[NaN,2000]);
@@ -400,7 +426,7 @@ for ii = 1:N_im
      s=load(fullfile(pathtodata,['autoscore_debugdataTytti_',filename,'.mat']),'OCTImagerotated'...
       ,'catheder_radius','sub_cartsurf','sub_middlecart','sub_cartsurf_smoothed',...
       'meancartthick','sub_cartbone');
-  end
+    end
 
   
   OCTImagerotated=s.OCTImagerotated;
