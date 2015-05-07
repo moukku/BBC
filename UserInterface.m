@@ -126,18 +126,21 @@ if(limit > 0)
     catch
         limit = 1;
      end
-    
-     
-     
-    kuvat = cell(limit, 1);
 
+     
+    %
+    %Control loop
+    %
     for (ii = 1:limit)
         imagesLeft = limit - ii;
+        
+        %????? FIX PLZ
         try
             loadpath=strcat(lpath, cell2mat(listing(ii:ii)));
         catch
             loadpath=strcat(lpath, cell2mat(listing(ii:ii)));
         end
+        
         try
             Image = imread(loadpath);
             filename = cell2mat(listing(ii));
@@ -147,92 +150,71 @@ if(limit > 0)
             filename = listing;
         end
 
-        
-
-
-        %Image = imresize(Image, 0.4, 'bilinear');
         Image = im2double(Image);
-        %parse the filename
-            %filename = listing(ii).name;
+
         %Create class intance
-
-        oMain = ImageProcessing(Image);
-
+        oMain = ImageProcessing(Image, ii);
+        
+        %Enhance image (Remove small blops etc)
+        Image = oMain.enhanceImage(Image);
+        
         %Align image
-        Image = oMain.alignCartilageHorizontally();
+        [Image, BWinitialcartilage] = oMain.alignCartilageHorizontally(Image);
 
-        %Enhance the image
-        [BWcartbone, BWcartsurf, BWcartsurf_smooth, BWmiddlecart]...
-            = oMain.EnhanceImage(Image);
-
+        %Find the cartilage surface
+        BWcartsurf = oMain.SegmentImage(Image);
+        
+        %Calculate surface roughness
+        oMain.calculateOri(BWcartsurf);
+        
+        
         %If the analysis was failed. The user is asked to place the ROI again. This
         %is done 5 times before the execution continues normally
-        k=1;
-        answer = {'x'};
-        while ~isempty(answer)
+%         k=1;
+%         answer = {'x'};
+%         while ~isempty(answer)
         %Get area of interest from the rotated image
         
         
         if(get(handles.UsePosition, 'Value') == 0)
-            AreaOfInterest = oMain.getAreaOfInterest(EnhancedImage);
+            AreaOfInterest = oMain.getAreaOfInterest(Image...
+                ,BWinitialcartilage);
         else
             Position = PositionCoordinates(1:end,1:end,limit);
-            AreaOfInterest = imcrop(EnhancedImage, Position);
+            AreaOfInterest = imcrop(BWinitialcartilage, Position);
         end
+         
+         [x, ~] = size(AreaOfInterest);
+         AreaOfInterest(1:end, 1:round(x * 0.05)) = 0;
+         AreaOfInterest(1:end, end-round(x * 0.05):end) = 0;
+
+        %Get measurement data
+        %Set iteration number
+        oMain.setii(1);
+
         
-            %Sharpen the area of interest
-            SharpenedImage = oMain.SharpenImage(AreaOfInterest);
-            [x, ~] = size(SharpenedImage);
-            SharpenedImage(1:end, 1:round(x * 0.05)) = 0;
-            SharpenedImage(1:end, end-round(x * 0.05):end) = 0;
-
-            %Get measurement data
-            %Set iteration number
-            oMain.setii(1);
-            
-            upper = oMain.getUpperEdge(SharpenedImage);
 
 
-            %Get position
-            if(get(handles.UsePosition, 'Value') == 0)
-                Position = oMain.getPosition();
-            end
-            oPosition = Position;
-
-            PositionCoordinates(1:end, 1:end, ii) = Position;
+        %Get position
+        if(get(handles.UsePosition, 'Value') == 0)
+            Position = oMain.getPosition();
+        end
+        [BWcartsurf, BWmiddlecart] = imcrop(BWcartsurf, Position);
+        figure, imshow(BWmiddlecart)
+        oMain.getUpperEdge(AreaOfInterest, BWcartsurf);
+        PositionCoordinates(1:end, 1:end, ii) = Position;
 
 
         %Save image
-        oMain.SaveImage(filename, Position, SharpenedImage);
+        oMain.SaveImage(filename, Position, AreaOfInterest);
 
-        [x, ~] = size(SharpenedImage);
+        [x, ~] = size(AreaOfInterest);
         Position = [0,0,Position(3)/2,x];
 
-        %Crop the image
-        ManipulatableImage = imcrop(SharpenedImage, Position);
-        
-        temp = imcrop(Image, oPosition);
-        if(ii == 1)
-            refImage = temp;
-        end
-        
-        % Get size of reference image
-        [rowsA colsA numberOfColorChannelsA] = size(refImage); 
-        % Get size of existing image B. 
-        [rowsB colsB numberOfColorChannelsB] = size(temp); 
-        % See if lateral sizes match. 
-        if rowsB ~= rowsA || colsA ~= colsB 
-            % Size of B does not match A, so resize B to match A's size. 
-            temp = imresize(temp, [rowsA colsA]);
-            upper = imresize(upper, [rowsA colsA]);
-        end
-        
-        rgbImage = cat(3, temp , temp , upper);
-        kuvat{ii} = rgbImage;
-        
+        surface = imcrop(BWcartsurf, Position);
 
         while Position(1) < Position(3)
-            try
+%             try
             %Set iteration number
             oMain.setii(oMain.getii()+1);
 
@@ -240,23 +222,22 @@ if(limit > 0)
             %oMain.getUpperEdge(ManipulatableImage);
 
             %Get Diagnosis for the image
-            oMain.Diagnose(SharpenedImage);
+            oMain.Diagnose(surface);
 
             %Crop the sharpened Image
             Position(1) = Position(1) + 1;
-            ManipulatableImage = imcrop(SharpenedImage, Position);
+            ManipulatableImage = imcrop(AreaOfInterest, Position);
 
-
-            catch
-            Position(1) = Position(1) + 1;
-                if(Position(1) >= Position(3))
-                    break;
-                else
-                    if(oMain.getii() > 2)
-                        oMain.setii(oMain.getii()-1);
-                    end
-                end
-            end
+%              catch
+%              Position(1) = Position(1) + 1;
+%                  if(Position(1) >= Position(3))
+%                      break;
+%                  else
+%                      if(oMain.getii() > 2)
+%                          oMain.setii(oMain.getii()-1);
+%                      end
+%                  end
+%              end
         end
         %Get the data
         data = oMain.stringParser(filename);
@@ -274,19 +255,19 @@ if(limit > 0)
 
 
 
-        if isempty(parsedData{2,6})  %eli jos tyhjä niin jatkaa looppia
-             answer ={'x'};
-        else
-            answer ={};
-        end
+%         if isempty(parsedData{2,6})  %eli jos tyhjä niin jatkaa looppia
+%              answer ={'x'};
+%         else
+%             answer ={};
+%         end
 
 
 
-        if k==5 %kokeillaan maksimissaan viisi kertaa
-            answer ={}
-        end
-        k=k+1;
-        end 
+%         if k==5 %kokeillaan maksimissaan viisi kertaa
+%             answer ={}
+%         end
+%         k=k+1;
+%         end 
         %-----------------------------------------------------------
         % ASD
         %------------------------------------------------------------
@@ -306,11 +287,6 @@ if(limit > 0)
             ,toPrint);
     end
     
-    %Save mosaic
-    kuvat = cell2mat(kuvat);
-    imwrite(kuvat,'C:\Users\wksadmin\Desktop\ICRS.2\Data\image.jpg');
-    
-    
     %Save Position coordinates for later use
      if(get(handles.UsePosition, 'Value') == 0)
         if(exist('C:\Users\wksadmin\Desktop\ICRS.2\configs.mat', 'file')...
@@ -323,3 +299,4 @@ if(limit > 0)
         end
      end
 end
+
