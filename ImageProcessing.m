@@ -71,11 +71,10 @@ classdef ImageProcessing < handle
         
 
                 
-        function f = ImageProcessing(cImage)
+        function f = ImageProcessing(cImage, ImageNumber)
    
             %Check if the variables actually exist.
             if(exist('cImage','var'))
-
                 %Remove catheter from image
                 findCatheder;
                 
@@ -100,8 +99,12 @@ classdef ImageProcessing < handle
         %
         % Made By Sami Vaananen
         % 2015-02-09
-
+          persistent position;
           OCTImage = cImage;
+          
+          %For now we have implemented manual selection because the images
+          %ion the training set are different
+          if 0
           [Nrows,Ncols]=size(OCTImage);
           middle_row=round(Nrows/2);
           middle_col=round(Ncols/2);
@@ -204,63 +207,53 @@ classdef ImageProcessing < handle
           setOriginalImage(f, cImage);
           f.setScale(catheder_radius*2/0.9);
 
+          end
+          
+          %
+          %Manual scoring
+          %
+          %User places the catheter on the image
+            [x,y] = size(OCTImage);
+            imshow(OCTImage);
+            temp = round(x*0.05);
+            if(ImageNumber == 1)
+                h = imellipse(gca, [x/2-temp, y/2-temp, temp, temp]);
+            else
+                h = imellipse(gca, position);
+            end
+            h.setResizable(true);
+            h.setFixedAspectRatioMode(true);
+            zoom(4);
+            wait(h);
+            position = getPosition(h);
+            
+            %Create mask
+            catheder_BWmask = h.createMask();
+            cImage = cImage - catheder_BWmask;
+            
+            Stats = regionprops(catheder_BWmask,'Area'...
+                ,'EquivDiameter','MajorAxisLength'...
+                ,'MinorAxisLength','Centroid');
+            catheder_radius=Stats.EquivDiameter/2;
+            
+            f.setOriginalImage(cImage);
+            f.setScale(catheder_radius*2/0.9);
+          
        end
   end%/ImageProcessing
         
         
 %-------------------------------------------------------------EnhanceImage#
+function Image = enhanceImage(obj, Image)
+        Image=Image-min(Image(:));
+        Image=Image./max(Image(:));
 
+        %There is artefact-like round object. Remove by
+        %thresholding.
+        Image(Image>0.95)=0;
+    end
         
-        function [BWcartedge, BWcartsurf] = EnhanceImage(obj, OCTImagerotated)
-        %Arguments:         -Instance
-        %Returns:           -Enhanced Image
-        %Summary:
-        %This function enhances the edge between the cartilage and the bone
-%                 cImage = obj.getOriginalImage();
-%                 lighter = cImage>0.2;
-%                 darker = cImage< 0.2;
-%                 
-%                 for(ji = 0.5:1:0.02)
-%                     for(jj = 0.4:ji:0.1)
-%                     lighter= lighter + cImage> jj;
-%                     lighter = lighter .*2;
-%                     end
-%                 end
-%                 
-%                 for(ji = 0.4:0:-0.02)
-%                     for(jj = 0.4:ji:-0.1)
-%                     darker = darker + cImage < jj;
-%                     darker = darker .*2;
-%                     end
-%                 end
-% 
-%                 cImage = cImage - ~(~darker + lighter);
-%                 cImage = cImage .*2;
-%                 cImage(cImage < 0.3) = .0;
-%                 [x y] = size(cImage);
-%                 
-%                 %Remove objects that are smaller than 5% of the image size
-%                 %from the image
-%                 
-%                 level = graythresh(cImage);
-%                 cImage = im2bw(cImage,level);
-%                 
-%                 cImage = bwareaopen(cImage, round(x*y*0.01));
-%                 cImage = imfill(cImage, 'holes');
-%                 
-%                 Image = cImage;
-%                 
-
-        %SAMIS SEGMENTATION CODE
-          %Images for plotting 
-  %Size of second half of the image
-  
-  catheder_radius = obj.getScale();
-  [BWcartedge, BWcartsurf] = obj.segmentCartilageSurfaces(OCTImagerotated,catheder_radius);
-  
-        end%/EnhanceImage
-        
-   function [BWcartedge, BWcartsurf] = segmentCartilageSurfaces(obj, OCTImagerotated, catheder_radius)
+  function [BWcartsurf, BWmiddlecart] = SegmentImage(obj, OCTImagerotated)
         %segmentCartilageSurfaces - Segments the cartilage surface, meanlayer and cartilage-bone interface
         %  [sub_cartsurf,sub_middlecart,sub_cartbone,sub_cartsurf_smoothed,meancartthick]=...
         %    segmentCartilageSurfaces(OCTImagerotated,catheder_radius);
@@ -279,13 +272,10 @@ classdef ImageProcessing < handle
         %    surface had been
         %    meancartthick - defines the average thickness of the cartilage
         %
-
+        catheder_radius = obj.getScale();
         [Nrows,Ncols]=size(OCTImagerotated);
         %middle_row=round(Nrows/2);
 
-
-        %Cartilage is in the lower half of the image. Therefore it is enough to
-        %work only with the lower half.
         IIrot=OCTImagerotated;
 
 
@@ -375,320 +365,112 @@ classdef ImageProcessing < handle
         [row_cartsurf,col_cartsurf]=find(BWIIrot);
 
         %Only one value on each column, i.e., calculate subscripts of the layer
-        [C,ia,ic] = unique(col_cartsurf) ;
+        [C,ia,ic] = unique(col_cartsurf, 'first') ;
 
         sub_cartsurf=[row_cartsurf(ia),col_cartsurf(ia)];
 
-
-        %Get surface of the cartilage
-
-        if 0
-          %For debugging, plot the image
-          red=IIrot;
-          green=IIrot;
-          blue=IIrot;
-
-          green(BWIIrot)=green(BWIIrot)+0.2;
-          green(green>1)=1;
-
-          imshow(cat(3,red,green,blue))
-        end
-
-        %Find common left and righ margin for the cartilage surface and the
-        %middle layer
         leftcart=round(max([min(sub_cartsurf_smoothed(:,2));min(sub_middlecart(:,2));min(sub_cartsurf(:,2))]+catheder_radius*0.5));
         rightcart=round(min([max(sub_cartsurf_smoothed(:,2));max(sub_middlecart(:,2));max(sub_cartsurf(:,2))]-catheder_radius*0.5));
-
-        %Crop cartilage borders to common limits
-        idxleft=sub_middlecart(:,2)<leftcart;
-        idxright=sub_middlecart(:,2)>rightcart;
-        sub_middlecart(idxleft|idxright,:)=[];
-
-        idxleft=sub_cartsurf_smoothed(:,2)<leftcart;
-        idxright=sub_cartsurf_smoothed(:,2)>rightcart;
-        sub_cartsurf_smoothed(idxleft|idxright,:)=[];
 
         idxleft=sub_cartsurf(:,2)<leftcart;
         idxright=sub_cartsurf(:,2)>rightcart;
         sub_cartsurf(idxleft|idxright,:)=[];
 
-
-        %Find Cartilage-Bone interface
-
-        meanhalfcartthick=mean(sub_middlecart(:,1)-sub_cartsurf_smoothed(:,1));
-
-        %Define cartilage-bone interface by moving the middle layer down the
-        %distance of meancartthick
-        sub_cartbone=sub_middlecart;
-        sub_cartbone(:,1)=sub_middlecart(:,1)+round(meanhalfcartthick);
-
-        %Return full average cartilage thickness, since it is clearer to understand
-        meancartthick=meanhalfcartthick*2;
+        BWmiddlecart=false([Nrows,Ncols]);
+        BWmiddlecart(sub2ind([Nrows,Ncols],sub_middlecart(:,1),sub_middlecart(:,2)))=true;
         
         BWcartsurf=false([Nrows,Ncols]);
         BWcartsurf(sub2ind([Nrows,Ncols],sub_cartsurf(:,1),sub_cartsurf(:,2)))=true;
         
-        end
+    end
         
         
         
 %--------------------------------------------------------------RotateImage#
-                
-       
 
-    function Image = RotateImage(obj, cImage)
-            %Arguments:     -Intance
-            %Returns:       -Rotated image
-            %Summary:
-            %This functions Rotates the cImage so that it's horisontal
-            %The closest surface to the catheter is chosen automatically
-            %and then the image is rotated so that the surface is
-            %horisontal
-                
-                %Get image dimensions
-                [width depth] = size(cImage);
-                obj.setXnY(width, depth);
-                
-                %Enhance the cartilage
-                se = strel('line',11,90);
-                cImage = imdilate(cImage, se);
-                
-                %Automatic cartilage detection
-                %Requires a lot of time which i dont currently have =(
-               
-%                NumOfElements = bwconncomp(cImage);
-%                
-%                %If there is only 1 element to be found the selection
-%                %process is quite simple
-%                if(NumOfElements.NumObjects == 1)
-%                    [x y] = find(cImage, 1, 'first');
-%                    test = bwselect(cImage, y, x);
-%                %If there are more than one cartilage surface then the
-%                %nearest to the center is chosen
-%                else
-%                   %Calculate the distance of closest cartilage
-%                   Distance = bwdist(cImage, 'Euclidean');
-%                    Distance = ceil(Distance);
-%                    Distance = Distance(round(width/2), round(depth/2));
-%                    [x y] = find(cImage(...
-%                       round(width/2)- Distance:...
-%                        round(width/2)+ Distance,...
-%                        round(depth/2)- Distance: ...
-%                       round(depth/2)+ Distance), 1, 'first');
-%                    
-%                    test = bwselect(cImage, y+ceil(depth/2),...
-%                        x+ceil(width/2));
-%               end
-%                
-%                NumOfElements = bwconncomp(test);
-%               if(NumOfElements.NumObjects < 1)
-%                    i= 5;
-%                   while(NumOfElements.NumObjects < 1)
-%                        try
-%                            if(y > round(depth/2))
-%                                test = bwselect(cImage,...
-%                                    y+round(depth/2)-i,x+round(width/2));
-%                            else
-%                               test = bwselect(cImage,...
-%                                    y+round(depth/2)+i,x+round(width/2));
-%                            end
-%                        NumOfElements = bwconncomp(test);
-%                         i = i +5;
-%                        catch err
-%                            disp(err);
-%                            return;
- %                       end
- %                   end
- %               end
- %
- 
-                %Show the cartilage to the user
-                EnhancedCartilage = obj.getOriginalImage() + edge(cImage...
-                    ,'canny');
-                imshow(EnhancedCartilage);
-                [x y] = ginput(1);
-                
-                %Select the cartilage
-                test = bwselect(cImage, x, y);
-                %Display the waitbar to the user
-                h = waitbar(0, 'Rotating image...');
-                
-                %Cartilage angle can be optained by using regionprops
-                try
-                    stats = regionprops(test, 'orientation');
-                    angle = stats.Orientation;
-                    
-                    %Update waitbar
-                    j = waitbar(0.5, 'Rotating image...');
-                    delete(h);
-                catch err
-                    error('Image did not meet requirements');
-                end
-                
-                            
-                %Sets the class variable
-                setAngle(obj,angle);
-                
-                %Instruct the user and increase the waitbar size
-                h = waitbar(0.9, 'Checking for errors');
-                delete(j);
-                
-                %Rotate the test image to check if the image is upside down
-                test = imrotate(test, -angle);
-                oImage = obj.getOriginalImage();
-                oImage = imrotate(oImage, -angle);
-                obj.setOriginalImage(oImage);
+    function calculateOri(obj, surface)
+        pixelspermm = obj.getScale();
 
- 
-                %This checks if the upper half contains more cartilage than
-                %the bottom half. If it does then that means that the image
-                %is upsidedown.
-                
-                %Get image dimensions
-                [width depth] = size(test);
-                
-                upperHalf = find(test(1:round(depth/2), 1:end)==1);
-                lowerHalf = find(test(round(depth/2):end, 1:end)==1);
-                
-                if(numel(upperHalf) > numel(lowerHalf))
-                   test = imrotate(test, -180);
-                   obj.setOriginalImage(imrotate(obj.getOriginalImage()...
-                       ,-180));
-                end
-                
-                delete(h);
-                
-                %Return rotated Image
-                Image = test;
-        end%/RotateImage
+        yy=surface(:,1);
+        xx=surface(:,2);
+        %Scale xx and yy to millimeters
+        minxx=min(xx);
+        xx=xx-minxx;
+        xx=xx/pixelspermm;
+        yy=yy/pixelspermm;
         
+        [B,A] = butter(3,0.05/(length(xx)/pixelspermm),'high');
+        
+        yyhighfreq=filtfilt(B,A,yy);
+        meanyyhighfreq=mean(yyhighfreq);
+
+        ORI=sqrt(sum((yyhighfreq-meanyyhighfreq).^2)/length(yyhighfreq));
+        obj.setUri(ORI);
+    end 
         
 %--------------------------------------------------------getAreaOfInterest#
         
         
         
-        function Image = getAreaOfInterest(obj, test)
-            %Arguments:         -Intance
-            %                   -Image
-            %Returns:           -Cropped image
-            %Summary
-            %This function gets the area of interest from the rotated image
-            %Resizable rectangle is used in order to get the are of
-            %interest.
-            
-                
-            
-                %Draw a nonresizable rectangle on the image
-                cImage2 = obj.getOriginalImage();
-                [width depth] = size(cImage2);
-                obj.setXnY(width, depth);
-                
-                %[~, y] = find(edge(test, 'canny'));
-                [~, Iy] = size(cImage2);
-
-                cImage2(:,1:round(Iy*0.3)) =0;
-                cImage2(:,end - round(Iy*0.3):end) = 0;
-
-                imshow(cImage2);
-                sade = round(obj.getScale()/2);
-                width = sade * 4;
-                height = sade * 3.5;
-                xStart = round(obj.getX()/2);
-                yStart = round(obj.getY()/2);
-                
-                h = imrect(gca,...
-                    [xStart, yStart, width, height]);
-                fcn = makeConstrainToRectFcn('imrect',get(gca,'XLim'),...
-                    get(gca,'YLim'));
-                setPositionConstraintFcn(h,fcn); 
-                
-                %Get rectangle coordinates
-                position = wait(h);
-                position(1) = round(position(1) * 0.95);
-                position(3) = width * 1.1;
-                
-                %Crop the image
-                cImage = imcrop(test, position);
-                
-                %Set class variable
-                obj.setPosition(position);
-                
-                %Set class variable
-                obj.setcroppedImage(cImage);
-                
-                %Enhance the image for processing
-                obj.setImage(cImage);
-                
-                Image = cImage;
-                
-        end%/getAreaOfInterest
-        
-        
-
-%#------------------------------------------------------------SharpenImage#
-
-        
-        function SharpenedImage = SharpenImage(obj, Image)
+    function Image = getAreaOfInterest(obj, Image, bwImage)
         %Arguments:         -Intance
         %                   -Image
-        %Returns:           -Sharpened image
-        %Summary:
-        %Filters image with a gaussian filter
-        %Removes small blops from the image that might have
-        %been left from the preliminary image processing.
+        %Returns:           -Cropped image
+        %Summary
+        %This function gets the area of interest from the rotated image
+        %Resizable rectangle is used in order to get the are of
+        %interest.
+
+
+
+        %Draw a nonresizable rectangle on the image
+        cImage2 = Image;
+        [width depth] = size(cImage2);
+        obj.setXnY(width, depth);
+
+        %[~, y] = find(edge(test, 'canny'));
+        [~, Iy] = size(cImage2);
+
+        cImage2(:,1:round(Iy*0.3)) =0;
+        cImage2(:,end - round(Iy*0.3):end) = 0;
+
+        imshow(cImage2);
+        sade = round(obj.getScale()/2);
+        width = sade * 4;
+        height = sade * 3.5;
+        xStart = round(obj.getX()/2);
+        yStart = round(obj.getY()/2);
+
+        h = imrect(gca,...
+            [xStart, yStart, width, height]);
+        fcn = makeConstrainToRectFcn('imrect',get(gca,'XLim'),...
+            get(gca,'YLim'));
+        setPositionConstraintFcn(h,fcn); 
+
+        %Get rectangle coordinates
+        position = wait(h);
+        position(1) = round(position(1) * 0.95);
+        position(3) = width * 1.1;
+
+        %Crop the image
+        cImage = imcrop(bwImage, position);
+
+        %Set class variable
+        obj.setPosition(position);
+
+        %Set class variable
+        obj.setcroppedImage(cImage);
+
+        %Enhance the image for processing
+        obj.setImage(cImage);
+
+        Image = cImage;
+                
+    end%/getAreaOfInterest
         
-
-            %Image is filtered
-            %TODO:
-            %
-            %This needs to be documented better
-            
-            %Set class variables
-            [x y] = size(Image);
-            obj.setXnY(x, y);
-            
-            
-            %Use gaussian filter to the image
-            h = fspecial('gaussian',15, 2);
-            gaus_filt = nlfilter(Image, [3 3], 'std2');
-            
-            %Filter the image for further processing
-            Image = imfilter(Image, h);
-            %Image = imfilter(Image - gaus_filt,h);
-            
-            
-            
-            Ibw  = im2bw(Image,graythresh(Image));
-            se = strel('line',3,90);
-            Image = imdilate(~Ibw,se);
-            
-            %Removes small blops from image
-            Image = bwmorph(Image,'clean', inf);
-            
-            %Removes isolated areas smaller than 25% of image size
-            p = round(obj.getX()*obj.getY()*0.25);
-            Image = bwareaopen(~Image, p);
-            
-            %Fill removes isolated holes from the image
-            %Since the holes are represented in black the image is used as
-            %its complement
-            Image=  bwmorph(~Image,'fill', inf);
-            
-            %Stores the image to a temporary variable after which all holes
-            %are filled in the image  
-            Image = imfill(~Image, 'holes');
-            
-            obj.setImage(Image);
-            
-            %Return sharpened Image
-            SharpenedImage = Image;
-
-        end%SharpenImage
-
-
 %#------------------------------------------------------------getUpperEdge#
         
-function RUpperEdge = getUpperEdge(obj, Image)
+function getUpperEdge(obj, Image, BWcartsurf)
         %Summary:
         %Uses edge detection to remove everything but the edge from the
         %picture. At this point the picture should only include the
@@ -705,78 +487,22 @@ function RUpperEdge = getUpperEdge(obj, Image)
         %SEE
         %http://www.sciencedirect.com/science/article/pii/S030156290400
         %0754 page 786
-        
-            %Get the class variable
-            
-
-            eImage = Image;
-            %get class variables
-            [x y] = size(eImage);
-           
-            %remove all but the edges
-            eImage = edge(eImage,'Roberts');
-            
-            eImage(: , 1:round(x*0.1)) = .0;
-            eImage(:,end-round(x*0.15):end) = .0;
-            
-            %If the image contains more than the upper and lower edge then
-            %the image is altered so that the separate elements combine
-            eImage = bwmorph(eImage, 'bridge');
-
-            
-            %TODO
-            %SLIT TO 2 BY FORCE!
-            
-            [frow fcol] = find(eImage, 1 ,'first');
-            [lrow lcol] = find(eImage, 1 ,'last');
-            
-            NumOfElements = bwconncomp(eImage);
-            
-            %Erase the smallest element from the list untill there's only 2
-            %connected elements left
-            if(NumOfElements.NumObjects > 2)
-                Toomuch = true;
-                while(Toomuch == true)
-                    numPixels = cellfun(@numel,NumOfElements.PixelIdxList);
-                    [~,idx] = min(numPixels);
-                    eImage(NumOfElements.PixelIdxList{idx}) = 0;
-                    NumOfElements = bwconncomp(eImage);
-                        if(NumOfElements.NumObjects == 2)
-                            Toomuch = false;
-                        end
-                end
-            end
-            
-            %Image with only the upper border is isolated. Picture with
-            %bottom and top border is required in order to get the
-            %cartilage depth
+       
             
             %Find first pixel of the upper edge
-            [row col] = find(eImage, 1 ,'first');
-            
-            %Get the upper edge from the image
-            upper = bwselect(eImage, col, row);
- 
-            %Get the lowerEdge
-            lower = (eImage - upper);
-   
+            [row col] = find(BWcartsurf, 1 ,'first');
+
             %Find last pixel of the upper edge
-            [row2 col2] = find(upper, 1 ,'last');
+            [row2 col2] = find(BWcartsurf, 1 ,'last');
             
             %Basic triconometrics are used to find out the cartliage angle.
             %The picture is adjusted so that the cartliage is aligned
             %horizontally
-            
-            deltaY = col2- col;
-            deltaX = row - row2;
-            angle = atan2(deltaY, deltaX) * 180 / pi;
+     
             
             %The variable upperEdge is used later.
-            upperEdge = upper;
-            
-            %RETURN UPPEREDGE!
-            RUpperEdge = upper;
-            
+            upperEdge = BWcartsurf;
+            upper = upperEdge;
             
             %Set the optimum line to the image.
             imshow(upper);       
@@ -802,8 +528,8 @@ function RUpperEdge = getUpperEdge(obj, Image)
             %Optimum cartliage length2 is counted.
             dist = nnz(upper) - length2;
  
-            %Upper contains the optimum carliage and the upper cartialge.
-            setOptimumLength(obj, dist);
+            %Upper contains the optimum carliage and the upper cartilage.
+            obj.setOptimumLength(dist);
             
             
             %FUNCTION CALL
@@ -828,18 +554,15 @@ function RUpperEdge = getUpperEdge(obj, Image)
                modifyImage = Image;
                
                %modifyImage = imrotate(modifyImage, 270 +abs(angle));
-               
-               lower = imrotate(lower, 270 +abs(angle));
-               upperEdge = imrotate(upperEdge, 270 +abs(angle));
               
-               [frow fcol] = find(lower, 1 ,'first');
-               [frow2 fcol2] = find(upperEdge, 1 ,'first');
-               [lrow lcol] = find(upperEdge, 1 ,'last');
-               [frow2 lcol2] = find(lower, 1 ,'last');
-               
-               
-               modifyImage(: , 1:min([fcol fcol2])) = .0;
-               modifyImage(:,max([lcol lcol2]):end) = .0;
+%                 [frow fcol] = find(lower, 1 ,'first');
+%                [frow2 fcol2] = find(upperEdge, 1 ,'first');
+%                [lrow lcol] = find(upperEdge, 1 ,'last');
+%                 [frow2 lcol2] = find(lower, 1 ,'last');
+%                
+%                
+%                modifyImage(: , 1:min([fcol fcol2])) = .0;
+%                modifyImage(:,max([lcol lcol2]):end) = .0;
               
                %Set class variable
                obj.setImage(modifyImage);
@@ -931,64 +654,13 @@ function RUpperEdge = getUpperEdge(obj, Image)
                %    obj.setVisualisizedDepth(VisualisizedDepth);
                %    
                %end
-               
-               %FUNCTION CALL
-               URI;
+            end
+end
 
-%#---------------------------------------------------------------------URI#
 
-             function URI
-                %calculateORI - Calculates optical roughness index
-                %  ORI=calculateORI(OCTImagerotated,sub_cartsurf,pixelspermm);
-                %
-                %  function takes as input
-                %
-                %  OCTImagerotated: OCT image of cartilage, where cartilage has been 
-                %  aligned horizontally, 
-                %  sub_cartsurf: subscribes of the cartilage surface,
-                %  pixelspermm: how many pixels are in one millimeter
 
-                %Sami Vaananen
-                %2015-2-16
-
-                  pixelspermm = obj.getScale();
-                  [yy,xx] = find(RUpperEdge);
-                 
-                    minxx=min(xx);
-                    xx=xx-minxx;
-  
-                  %pixelspermm=(catheder_radius*2/catheder_diameter_mm);
-
-                  %imshow(IIrot)
-                  %hold on
-                  %plot(sub_cartsurf(:,2),sub_cartsurf(:,1),'-r')
-
-                   %yy=sub_cartsurf(:,1);
-                   %xx=sub_cartsurf(:,2);
-
-                  %Scale xx and yy to millimeter
-                    xx=xx/pixelspermm;
-  
-                    yy=yy/pixelspermm;
-
-                  %Highpass with 3rd order butter with cut-off frequency 0.05/1mm
-                  [B,A] = butter(3,0.05/(max(size((xx)))/pixelspermm),'high');
-
-                  yyhighfreq=filtfilt(B,A,yy);
-                  meanyyhighfreq=max(yyhighfreq);
-                  
-                   obj.setUri(sqrt(sum((yyhighfreq-meanyyhighfreq).^2)...
-                       /length(yyhighfreq)));
-                  
-
-                end
-            end%MeasureDepth     
-        end%getUpperEdge
-        
-        
-%------------------------------------------------alignCartilageHorizontally
-
-        function OCTImagerotated = alignCartilageHorizontally(obj)
+        function [OCTImagerotated, BWinitialcartilage]...
+                = alignCartilageHorizontally(obj, Image)
         %Summary:
         %alignCartilageHorizontally - Find cartilage and align it
         %horizontally Function finds the largest object with high intensity
@@ -996,68 +668,43 @@ function RUpperEdge = getUpperEdge(obj, Image)
         %calculates the major axis of this object and rotates image such
         %that the major axis is horizontal.
 
-          OCTImage = obj.getOriginalImage();
-          [Nrows,Ncols]=size(OCTImage);
-          middle_row=round(Nrows/2);
-          middle_col=round(Ncols/2);
-          
-          disp(middle_row)
-          disp(middle_col)
+        OCTImage = Image;
+        [Nrows,Ncols]=size(OCTImage);
+        middle_row=round(Nrows/2);
+        middle_col=round(Ncols/2);
 
-            %Now it is assumed that catheder has been removed earlier
-            centerintensity=sum(sum(...
-                abs(OCTImage(middle_row-3:middle_row+3,...
-                middle_col-3:middle_col+3))));
-            if centerintensity
-              error(['Catheder mask was not given but center of'...
-                  'image has nonzero values. Check input.']);
-            end
+        disp(middle_row)
+        disp(middle_col)
 
-            IInocath=OCTImage;
+        %Now it is assumed that catheder has been removed earlier
+        centerintensity=sum(sum(...
+        abs(OCTImage(middle_row-3:middle_row+3,...
+        middle_col-3:middle_col+3))));
 
+        IInocath=OCTImage;
 
+        BWinitialcartilage = pickCartilage(IInocath);
 
+        %I found this threshold level with trial and error. It worked
+        %with 100 images I tested but it is not guaranteed that it
+        %works with all possible cartilage OCT images.
 
-          %I found this threshold level with trial and error. It worked
-          %with 100 images I tested but it is not guaranteed that it
-          %works with all possible cartilage OCT images.
+        CC = bwconncomp(BWinitialcartilage);
+        stats=regionprops(CC,'Area','Orientation');
 
-          trlevel= 0.14;%graythresh(IInocath);
+        cartilage_angle=stats.Orientation;
 
+        %First,rotate mask and make sure it end up to bottom part of theimage
+        BWincartRot=imrotate(BWinitialcartilage,-cartilage_angle,'nearest','crop');
+        if sum(sum(BWincartRot(1:end/2,:)))>sum(sum(BWincartRot(end/2+1:end,:)))
+        %Cartilage is upside down
 
-          BWinitialcartilage=im2bw(IInocath,trlevel);
-          CC = bwconncomp(BWinitialcartilage);
-          stats=regionprops(CC,'Area','Orientation');
+        cartilage_angle=cartilage_angle+180;
+        %imshow(BWincartRot)
+        end
 
-          areas=[stats.Area];
-          idx_maxarea=find(areas==max(areas));
-
-          BWinitialcartilage=false(size(IInocath));
-          BWinitialcartilage(CC.PixelIdxList{idx_maxarea})=true;
-
-          se=strel('arbitrary',true(5,5));
-          BWinitialcartilage=imclose(BWinitialcartilage,se);
-
-          BWinitialcartilage=imfill(BWinitialcartilage,'holes');
-          %   imshow(BWinitcart)
-
-
-          % Rotate cartilage horizontally
-
-          CC = bwconncomp(BWinitialcartilage);
-          stats=regionprops(CC,'Area','Orientation');
-
-          cartilage_angle=stats.Orientation;
-
-
-          OCTImagerotated=imrotate(IInocath,-cartilage_angle,...
-              'bilinear','crop');
-
-          if nargin>1
-          catheder_BWmask_rot=imrotate(catheder_BWmask,-cartilage_angle,...
-              'bilinear','crop');
-          end
-        end%/alignCartilageHorizontally
+        OCTImagerotated=imrotate(IInocath,-cartilage_angle,'bilinear','crop');
+    end%/alignCartilageHorizontally
 
 
         
@@ -1067,7 +714,7 @@ function RUpperEdge = getUpperEdge(obj, Image)
 
 
         
-        function Diagnose(obj, image)
+        function Diagnose(obj, surface)
         %Summary:
         %This function does the final diagnosis to the selected area.
         %The cartilage is rated from 0 to 4.
@@ -1078,27 +725,11 @@ function RUpperEdge = getUpperEdge(obj, Image)
         %3 = Damage extends down to > 50% of cartilage depth
         %4 = Damage extends to the bottom
             
-           %remove all but the edges
-           eImage = edge(image,'roberts',0);
-           eImage = bwmorph(eImage, 'bridge');
+        
+        %Find the smalles element from the list of depths
+         %Matrice is sorted ofcourse
            
-           
-           %Find first pixel of the upper edge
-           [row col] = find(eImage, 1,'first');
-           [row2 col2] = find(eImage, 1 ,'last');
-           
-           %breaks the image to top and bottom borders
-           eImage(1:end ,col:col+5) = .0;
-           eImage(1:end ,col2-5:col2) = .0;
-           
-           %Get the upper edge from the image
-           [row col] = find(eImage, 1,'first');
-           upperEdge = bwselect(eImage, col, row);
-       
-           %Find the smalles element from the list of depths
-           %Matrice is sorted ofcourse
-           
-           [v, ~] = find(upperEdge);
+           [v, ~] = find(surface);
            v = sort(v);
            
            depth = obj.getLimit();
@@ -1109,6 +740,8 @@ function RUpperEdge = getUpperEdge(obj, Image)
                 obj.setDiagnosis(3);
             elseif(depth - cMin < round(cartilageDepth * 0.9))
                 obj.setDiagnosis(2);
+            elseif(obj.getUri() > 0.01)
+                obj.setDiagnosis(1);
             else
                 obj.setDiagnosis(0);
             end
@@ -1535,8 +1168,7 @@ function RUpperEdge = getUpperEdge(obj, Image)
         
        function setPosition(obj, position)
            obj.position = position; 
-        end
-        
+       end
 
 %#---------------------------------------------------------------Accessors#
     
@@ -1611,7 +1243,7 @@ function RUpperEdge = getUpperEdge(obj, Image)
            image = obj.croppedImage; 
         end
         
+        
     end%Methods
    
 end%Orientation
-
