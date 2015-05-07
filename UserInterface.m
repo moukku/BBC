@@ -131,6 +131,7 @@ if(limit > 0)
     %
     %Control loop
     %
+     kuvat = cell(limit, 1);
     for (ii = 1:limit)
         imagesLeft = limit - ii;
         
@@ -162,7 +163,7 @@ if(limit > 0)
         [Image, BWinitialcartilage] = oMain.alignCartilageHorizontally(Image);
 
         %Find the cartilage surface
-        BWcartsurf = oMain.SegmentImage(Image);
+        [BWcartsurf, BWmiddlecart] = oMain.SegmentImage(Image);
         
         %Calculate surface roughness
         oMain.calculateOri(BWcartsurf);
@@ -199,8 +200,21 @@ if(limit > 0)
         if(get(handles.UsePosition, 'Value') == 0)
             Position = oMain.getPosition();
         end
-        [BWcartsurf, BWmiddlecart] = imcrop(BWcartsurf, Position);
-        figure, imshow(BWmiddlecart)
+        BWmiddlecart = BWmiddlecart + BWcartsurf;
+        surface = imcrop(BWcartsurf, Position);
+        if(ii == 1)
+            refImage = BWmiddlecart;
+        end
+         % Get size of reference image
+        [rowsA colsA numberOfColorChannelsA] = size(refImage); 
+        % Get size of existing image B. 
+        [rowsB colsB numberOfColorChannelsB] = size(BWmiddlecart); 
+        % See if lateral sizes match. 
+        if rowsB ~= rowsA || colsA ~= colsB 
+            % Size of B does not match A, so resize B to match A's size. 
+            BWmiddlecart = imresize(BWmiddlecart, [rowsA colsA]);
+        end
+        kuvat{ii} = BWmiddlecart;
         oMain.getUpperEdge(AreaOfInterest, BWcartsurf);
         PositionCoordinates(1:end, 1:end, ii) = Position;
 
@@ -211,7 +225,7 @@ if(limit > 0)
         [x, ~] = size(AreaOfInterest);
         Position = [0,0,Position(3)/2,x];
 
-        surface = imcrop(BWcartsurf, Position);
+        %surface = imcrop(BWcartsurf, Position);
 
         while Position(1) < Position(3)
 %             try
@@ -286,6 +300,9 @@ if(limit > 0)
              set(handles.NotfConsole, 'String'...
             ,toPrint);
     end
+    
+    kuvat = cell2mat(kuvat);
+    imwrite(kuvat,'C:\Users\wksadmin\Documents\GitHub\BBC\Keski.jpg');
     
     %Save Position coordinates for later use
      if(get(handles.UsePosition, 'Value') == 0)
