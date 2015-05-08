@@ -275,9 +275,11 @@ function Image = enhanceImage(obj, Image)
         catheder_radius = obj.getScale();
         [Nrows,Ncols]=size(OCTImagerotated);
         %middle_row=round(Nrows/2);
-
+        
+        [Nrows,Ncols]=size(OCTImagerotated);
+        middle_row=round(Nrows/2);
         IIrot=OCTImagerotated;
-
+        IIrot(1:middle_row,:) = .0;
 
         %Filter image with a strong horizontal filter
         %The filter sizes has been found with trial and error.
@@ -314,7 +316,7 @@ function Image = enhanceImage(obj, Image)
         [row_meancart,col_meancart]=find(idxmeancart);
 
         %Only one value on each column, i.e., calculate subscripts of the layer
-        [C,ia,ic] = unique(col_meancart) ;
+        [C,ia,ic] = unique(col_meancart, 'first') ;
 
         sub_middlecart=[row_meancart(ia),col_meancart(ia)];
 
@@ -375,13 +377,35 @@ function Image = enhanceImage(obj, Image)
         idxleft=sub_cartsurf(:,2)<leftcart;
         idxright=sub_cartsurf(:,2)>rightcart;
         sub_cartsurf(idxleft|idxright,:)=[];
-
-        BWmiddlecart=false([Nrows,Ncols]);
-        BWmiddlecart(sub2ind([Nrows,Ncols],sub_middlecart(:,1),sub_middlecart(:,2)))=true;
         
         BWcartsurf=false([Nrows,Ncols]);
         BWcartsurf(sub2ind([Nrows,Ncols],sub_cartsurf(:,1),sub_cartsurf(:,2)))=true;
         
+        BWmiddlecart=false([Nrows,Ncols]);
+        BWmiddlecart(sub2ind([Nrows,Ncols],sub_middlecart(:,1),sub_middlecart(:,2)))=true;
+        
+        
+        %Lower the middle marker by the difference of middle and surface
+        BWcartsurf = im2bw(BWcartsurf);
+        BWmiddlecart = im2bw(BWmiddlecart);
+        [y1, ~] = find(BWcartsurf == 1);
+        [y2, x] = find(BWmiddlecart == 1);
+        
+        meanSurf = mean(y1);
+        meanMid = mean(y2);
+        
+        ToLower = round(meanMid - meanSurf);
+        
+        y2 = y2 + ToLower;
+        new = zeros(size(BWmiddlecart));
+        new = im2bw(new);
+        
+        %See if the for loop van be removed
+        for(ii=1:numel(x))
+            new(y2(ii), x(ii)) = 1;
+        end
+        
+        BWmiddlecart = new;
     end
         
         
@@ -390,12 +414,14 @@ function Image = enhanceImage(obj, Image)
 
     function calculateOri(obj, surface)
         pixelspermm = obj.getScale();
-
-        yy=surface(:,1);
-        xx=surface(:,2);
-        %Scale xx and yy to millimeters
-        minxx=min(xx);
-        xx=xx-minxx;
+        
+        [yy, xx] = find(surface);
+        
+%         yy=surface(:,1);
+%         xx=surface(:,2);
+%         %Scale xx and yy to millimeters
+%         minxx=min(xx);
+%         xx=xx-minxx;
         xx=xx/pixelspermm;
         yy=yy/pixelspermm;
         
@@ -470,192 +496,192 @@ function Image = enhanceImage(obj, Image)
         
 %#------------------------------------------------------------getUpperEdge#
         
-function getUpperEdge(obj, Image, BWcartsurf)
-        %Summary:
-        %Uses edge detection to remove everything but the edge from the
-        %picture. At this point the picture should only include the
-        %cartilage
-        %
-        %Functions:
-        %MeasureDepth
-        %Measures the cartilage depth
-        %
-        %URI:
-        %Measures the ultrasound rougnhes index
-        %
-        %For more information about URI
-        %SEE
-        %http://www.sciencedirect.com/science/article/pii/S030156290400
-        %0754 page 786
-       
-            
-            %Find first pixel of the upper edge
-            [row col] = find(BWcartsurf, 1 ,'first');
-
-            %Find last pixel of the upper edge
-            [row2 col2] = find(BWcartsurf, 1 ,'last');
-            
-            %Basic triconometrics are used to find out the cartliage angle.
-            %The picture is adjusted so that the cartliage is aligned
-            %horizontally
-     
-            
-            %The variable upperEdge is used later.
-            upperEdge = BWcartsurf;
-            upper = upperEdge;
-            
-            %Set the optimum line to the image.
-            imshow(upper);       
-            try
-                myLine = imline(gca, [col col2], [row row2]);
-            catch err
-                return;
-            end
-            
-            %Optimum cartliage lengh is "burned" to the image
-            binaryImage2 = myLine.createMask();
-            upper(binaryImage2) = 255;
-            
-            %Upper cartilage length is determined by counting the white
-            %pixels from the image. Note that the variable upperEdge
-            %contains only the upper edge and variable upper constains the
-            %upper edge and the optimum cartilage.
-            length2 = nnz(upperEdge);
-            
-            %Sets the class variable
-            obj.setLength(length2);
-            
-            %Optimum cartliage length2 is counted.
-            dist = nnz(upper) - length2;
- 
-            %Upper contains the optimum carliage and the upper cartilage.
-            obj.setOptimumLength(dist);
-            
-            
-            %FUNCTION CALL
-            MeasureDepth;
-            
-
-%#------------------------------------------------------------MeasureDepth#
-            
- 
-
-            function MeasureDepth
-            %Summary:
-            %Nested function that measures the cartilage depth
-            %
-            %Functions:
-            %URI: Measures the ultrasound roughnes index
-            %
-            %Display average depth
-               
-
-               %Rotate the image
-               modifyImage = Image;
-               
-               %modifyImage = imrotate(modifyImage, 270 +abs(angle));
-              
-%                 [frow fcol] = find(lower, 1 ,'first');
-%                [frow2 fcol2] = find(upperEdge, 1 ,'first');
-%                [lrow lcol] = find(upperEdge, 1 ,'last');
-%                 [frow2 lcol2] = find(lower, 1 ,'last');
+% function getUpperEdge(obj, Image, BWcartsurf)
+%         %Summary:
+%         %Uses edge detection to remove everything but the edge from the
+%         %picture. At this point the picture should only include the
+%         %cartilage
+%         %
+%         %Functions:
+%         %MeasureDepth
+%         %Measures the cartilage depth
+%         %
+%         %URI:
+%         %Measures the ultrasound rougnhes index
+%         %
+%         %For more information about URI
+%         %SEE
+%         %http://www.sciencedirect.com/science/article/pii/S030156290400
+%         %0754 page 786
+%        
+%             
+%             %Find first pixel of the upper edge
+%             [row col] = find(BWcartsurf, 1 ,'first');
+% 
+%             %Find last pixel of the upper edge
+%             [row2 col2] = find(BWcartsurf, 1 ,'last');
+%             
+%             %Basic triconometrics are used to find out the cartliage angle.
+%             %The picture is adjusted so that the cartliage is aligned
+%             %horizontally
+%      
+%             
+%             %The variable upperEdge is used later.
+%             upperEdge = BWcartsurf;
+%             upper = upperEdge;
+%             
+%             %Set the optimum line to the image.
+%             imshow(upper);       
+%             try
+%                 myLine = imline(gca, [col col2], [row row2]);
+%             catch err
+%                 return;
+%             end
+%             
+%             %Optimum cartliage lengh is "burned" to the image
+%             binaryImage2 = myLine.createMask();
+%             upper(binaryImage2) = 255;
+%             
+%             %Upper cartilage length is determined by counting the white
+%             %pixels from the image. Note that the variable upperEdge
+%             %contains only the upper edge and variable upper constains the
+%             %upper edge and the optimum cartilage.
+%             length2 = nnz(upperEdge);
+%             
+%             %Sets the class variable
+%             obj.setLength(length2);
+%             
+%             %Optimum cartliage length2 is counted.
+%             dist = nnz(upper) - length2;
+%  
+%             %Upper contains the optimum carliage and the upper cartilage.
+%             obj.setOptimumLength(dist);
+%             
+%             
+%             %FUNCTION CALL
+%             MeasureDepth;
+%             
+% 
+% %#------------------------------------------------------------MeasureDepth#
+%             
+%  
+% 
+%             function MeasureDepth
+%             %Summary:
+%             %Nested function that measures the cartilage depth
+%             %
+%             %Functions:
+%             %URI: Measures the ultrasound roughnes index
+%             %
+%             %Display average depth
+%                
+% 
+%                %Rotate the image
+%                modifyImage = Image;
+%                
+%                %modifyImage = imrotate(modifyImage, 270 +abs(angle));
+%               
+% %                 [frow fcol] = find(lower, 1 ,'first');
+% %                [frow2 fcol2] = find(upperEdge, 1 ,'first');
+% %                [lrow lcol] = find(upperEdge, 1 ,'last');
+% %                 [frow2 lcol2] = find(lower, 1 ,'last');
+% %                
+% %                
+% %                modifyImage(: , 1:min([fcol fcol2])) = .0;
+% %                modifyImage(:,max([lcol lcol2]):end) = .0;
+%               
+%                %Set class variable
+%                obj.setImage(modifyImage);
 %                
 %                
-%                modifyImage(: , 1:min([fcol fcol2])) = .0;
-%                modifyImage(:,max([lcol lcol2]):end) = .0;
-              
-               %Set class variable
-               obj.setImage(modifyImage);
-               
-               
-               %The following alghorithm finds the cartilage depth, mid
-               %depth and upper edge.
-               area = nnz(modifyImage);
-               found = false;
-               sum2 = 0;
-               limit = 2;
-               firsFound = false;
-               firsFound2 = false;
-               upperLimit = 0;
-               mid = 0;
-
-               while(found == false)
-                    sum2 = nnz(modifyImage(1:limit,:));
-                    if(sum2 >= round(area*0.9))
-                        break;
-                    elseif(sum2 >= round(area*0.1) && firsFound == false)
-                        firsFound = true;
-                        upperLimit = limit;
-                        limit = limit +1;
-                        
-                    elseif(sum2 >= round(area*0.45) && firsFound2 == false)
-                        firsFound2 = true;
-                        mid = limit;
-                        limit = limit +1;
-                    else
-                        limit = limit +1;
-                    end
-               end
-
-               %Set class variable
-               obj.setLimit(limit);
-              
-               %Find white pixels
-               [topX topY] = find(modifyImage == 1);
-               
-               %Find last white pixel in column
-               [lTopx lTopY] = unique(topY);
-               LastOccurance = (topX(lTopY));
-               
-               %Find first white pixel in column
-               [lTopx lTopY] = unique(topY, 'first');
-               FirstOccurance = (topX(lTopY));
-               
-               %set class variable
-               obj.setcDepthY(FirstOccurance);
-               
-               %cartilage depth is calculated
-               Depth = LastOccurance - FirstOccurance;
-               
-               %Set class variable
-               obj.setAllDepths(Depth);
-               
-               %Average
-               obj.setDepth(limit - upperLimit);
-
-               %Set class variable
-               obj.setcDepthX(upperLimit);
-               
-               %if(obj.getii() == 1)
-               %    VisualisizedDepth = modifyImage;
-
-               %    %Turn to RBG image
-               %    VisualisizedDepth =double(cat(3, VisualisizedDepth,...
-               %        VisualisizedDepth, VisualisizedDepth));
-               %
-                   %Draw thickness in red
-               %    VisualisizedDepth(limit:limit+4, 1:end, 1) = .255;
-               %    VisualisizedDepth(limit:limit+4, 1:end, 2) = .100;
-               %    VisualisizedDepth(limit:limit+4, 1:end, 3) = .100;
-               %    
-               %    %Draw mid thickness
-               %    VisualisizedDepth(mid:mid+4, 1:end, 1) = .100;
-               %    VisualisizedDepth(mid:mid+4, 1:end, 2) = .255;
-               %    VisualisizedDepth(mid:mid+4, 1:end, 3) = .100;
-               %    
-               %    %Draw limit
-               %    VisualisizedDepth(upperLimit:upperLimit+4,...
-               %        1:end, 1) = .100;
-               %    VisualisizedDepth(upperLimit:upperLimit+4,...
-               %        1:end, 2) = .100;
-               %    VisualisizedDepth(upperLimit:upperLimit+4,...
-               %        1:end, 3) = .255;
-               %
-               %    obj.setVisualisizedDepth(VisualisizedDepth);
-               %    
-               %end
-            end
-end
+%                %The following alghorithm finds the cartilage depth, mid
+%                %depth and upper edge.
+%                area = nnz(modifyImage);
+%                found = false;
+%                sum2 = 0;
+%                limit = 2;
+%                firsFound = false;
+%                firsFound2 = false;
+%                upperLimit = 0;
+%                mid = 0;
+% 
+%                while(found == false)
+%                     sum2 = nnz(modifyImage(1:limit,:));
+%                     if(sum2 >= round(area*0.9))
+%                         break;
+%                     elseif(sum2 >= round(area*0.1) && firsFound == false)
+%                         firsFound = true;
+%                         upperLimit = limit;
+%                         limit = limit +1;
+%                         
+%                     elseif(sum2 >= round(area*0.45) && firsFound2 == false)
+%                         firsFound2 = true;
+%                         mid = limit;
+%                         limit = limit +1;
+%                     else
+%                         limit = limit +1;
+%                     end
+%                end
+% 
+%                %Set class variable
+%                obj.setLimit(limit);
+%               
+%                %Find white pixels
+%                [topX topY] = find(modifyImage == 1);
+%                
+%                %Find last white pixel in column
+%                [lTopx lTopY] = unique(topY);
+%                LastOccurance = (topX(lTopY));
+%                
+%                %Find first white pixel in column
+%                [lTopx lTopY] = unique(topY, 'first');
+%                FirstOccurance = (topX(lTopY));
+%                
+%                %set class variable
+%                obj.setcDepthY(FirstOccurance);
+%                
+%                %cartilage depth is calculated
+%                Depth = LastOccurance - FirstOccurance;
+%                
+%                %Set class variable
+%                obj.setAllDepths(Depth);
+%                
+%                %Average
+%                obj.setDepth(limit - upperLimit);
+% 
+%                %Set class variable
+%                obj.setcDepthX(upperLimit);
+%                
+%                %if(obj.getii() == 1)
+%                %    VisualisizedDepth = modifyImage;
+% 
+%                %    %Turn to RBG image
+%                %    VisualisizedDepth =double(cat(3, VisualisizedDepth,...
+%                %        VisualisizedDepth, VisualisizedDepth));
+%                %
+%                    %Draw thickness in red
+%                %    VisualisizedDepth(limit:limit+4, 1:end, 1) = .255;
+%                %    VisualisizedDepth(limit:limit+4, 1:end, 2) = .100;
+%                %    VisualisizedDepth(limit:limit+4, 1:end, 3) = .100;
+%                %    
+%                %    %Draw mid thickness
+%                %    VisualisizedDepth(mid:mid+4, 1:end, 1) = .100;
+%                %    VisualisizedDepth(mid:mid+4, 1:end, 2) = .255;
+%                %    VisualisizedDepth(mid:mid+4, 1:end, 3) = .100;
+%                %    
+%                %    %Draw limit
+%                %    VisualisizedDepth(upperLimit:upperLimit+4,...
+%                %        1:end, 1) = .100;
+%                %    VisualisizedDepth(upperLimit:upperLimit+4,...
+%                %        1:end, 2) = .100;
+%                %    VisualisizedDepth(upperLimit:upperLimit+4,...
+%                %        1:end, 3) = .255;
+%                %
+%                %    obj.setVisualisizedDepth(VisualisizedDepth);
+%                %    
+%                %end
+%             end
+% end
 
 
 
@@ -714,7 +740,7 @@ end
 
 
         
-        function Diagnose(obj, surface)
+        function Diagnose(obj, surface, interface)
         %Summary:
         %This function does the final diagnosis to the selected area.
         %The cartilage is rated from 0 to 4.
@@ -732,13 +758,19 @@ end
            [v, ~] = find(surface);
            v = sort(v);
            
-           depth = obj.getLimit();
-           cMin = v(end);
-           cartilageDepth = obj.getDepth();
+           [interface, ~] = find(interface);
+           depth = mean(interface);
+           [limit, ~] = find(surface);
+           cMin = max(limit);
+           limit = min(limit);
            
-            if(depth - cMin < round(cartilageDepth * 0.5))
+           cartilagethickness = mean(interface) - limit;
+           lesion = mean(interface) - cMin;
+           obj.setDepth(depth);
+           
+            if(lesion < round(cartilagethickness * 0.5))
                 obj.setDiagnosis(3);
-            elseif(depth - cMin < round(cartilageDepth * 0.9))
+            elseif(lesion < round(cartilagethickness * 0.85))
                 obj.setDiagnosis(2);
             elseif(obj.getUri() > 0.01)
                 obj.setDiagnosis(1);
