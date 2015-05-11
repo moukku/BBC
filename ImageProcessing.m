@@ -377,6 +377,34 @@ function Image = enhanceImage(obj, Image)
         idxleft=sub_cartsurf(:,2)<leftcart;
         idxright=sub_cartsurf(:,2)>rightcart;
         sub_cartsurf(idxleft|idxright,:)=[];
+         
+        
+        %MOUKKUS CODE
+        %
+        %
+        %
+        %
+        %Only one value on each column, i.e., calculate subscripts of the layer
+        [C,ia,ic] = unique(col_cartsurf, 'last') ;
+
+        sub_cartbone=[row_cartsurf(ia),col_cartsurf(ia)];
+
+        leftcart=round(max([min(sub_cartsurf_smoothed(:,2));min(sub_middlecart(:,2));min(sub_cartbone(:,2))]+catheder_radius*0.5));
+        rightcart=round(min([max(sub_cartsurf_smoothed(:,2));max(sub_middlecart(:,2));max(sub_cartbone(:,2))]-catheder_radius*0.5));
+
+        idxleft=sub_cartbone(:,2)<leftcart;
+        idxright=sub_cartbone(:,2)>rightcart;
+        sub_cartbone(idxleft|idxright,:)=[];
+        
+        
+        
+        %
+        %
+        %
+        %
+        %MOuKKUS CODE
+        
+        %Find Cartilage-Bone interface
         
         BWcartsurf=false([Nrows,Ncols]);
         BWcartsurf(sub2ind([Nrows,Ncols],sub_cartsurf(:,1),sub_cartsurf(:,2)))=true;
@@ -384,17 +412,24 @@ function Image = enhanceImage(obj, Image)
         BWmiddlecart=false([Nrows,Ncols]);
         BWmiddlecart(sub2ind([Nrows,Ncols],sub_middlecart(:,1),sub_middlecart(:,2)))=true;
         
-        
+        BWmbonecart=false([Nrows,Ncols]);
+        BWmbonecart(sub2ind([Nrows,Ncols],sub_cartbone(:,1),sub_cartbone(:,2)))=true;
+
         %Lower the middle marker by the difference of middle and surface
-        BWcartsurf = im2bw(BWcartsurf);
+        BWmbonecart = im2bw(BWmbonecart);
         BWmiddlecart = im2bw(BWmiddlecart);
-        [y1, ~] = find(BWcartsurf == 1);
+        BWcartsurf = im2bw(BWcartsurf);
+        [y1, ~] = find(BWmbonecart == 1);
         [y2, x] = find(BWmiddlecart == 1);
+        [y3, ~] = find(BWcartsurf == 1);
         
-        meanSurf = mean(y1);
+        meanBone = mean(y1); 
         meanMid = mean(y2);
-        
-        ToLower = round(meanMid - meanSurf);
+        meanSurf = mean(y3);
+         
+        ToLower = round(meanBone - meanSurf);
+        ToLower2 = round(meanBone - meanMid);
+        ToLower = round((ToLower + ToLower2) / 2);
         
         y2 = y2 + ToLower;
         new = zeros(size(BWmiddlecart));
@@ -754,7 +789,12 @@ function Image = enhanceImage(obj, Image)
         
         %Find the smalles element from the list of depths
          %Matrice is sorted ofcourse
-           
+            temp = surface + interface;
+            NumOfElements = bwconncomp(temp);
+                if(NumOfElements.NumObjects < 2)
+                    return;
+                end
+         
            [v, ~] = find(surface);
            v = sort(v);
            
