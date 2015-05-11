@@ -200,30 +200,34 @@ if(limit > 0)
         if(get(handles.UsePosition, 'Value') == 0)
             Position = oMain.getPosition();
         end
-        BWmiddlecart = BWmiddlecart + BWcartsurf;
+        
         surface = imcrop(BWcartsurf, Position);
+        interface = imcrop(BWmiddlecart, Position);
+        temp = imcrop(Image, Position) + surface + interface;
         if(ii == 1)
-            refImage = BWmiddlecart;
+            refImage = temp;
         end
          % Get size of reference image
         [rowsA colsA numberOfColorChannelsA] = size(refImage); 
         % Get size of existing image B. 
-        [rowsB colsB numberOfColorChannelsB] = size(BWmiddlecart); 
+        [rowsB colsB numberOfColorChannelsB] = size(temp); 
         % See if lateral sizes match. 
         if rowsB ~= rowsA || colsA ~= colsB 
             % Size of B does not match A, so resize B to match A's size. 
-            BWmiddlecart = imresize(BWmiddlecart, [rowsA colsA]);
+            temp = imresize(temp, [rowsA colsA]);
         end
-        kuvat{ii} = BWmiddlecart;
-        oMain.getUpperEdge(AreaOfInterest, BWcartsurf);
+        kuvat{ii} = temp;
+%        oMain.getUpperEdge(AreaOfInterest, BWcartsurf);
         PositionCoordinates(1:end, 1:end, ii) = Position;
 
 
         %Save image
         oMain.SaveImage(filename, Position, AreaOfInterest);
 
-        [x, ~] = size(AreaOfInterest);
+        [x, ~] = size(surface);
         Position = [0,0,Position(3)/2,x];
+        surface = imcrop(surface, Position);
+        interface = imcrop(interface, Position);
 
         %surface = imcrop(BWcartsurf, Position);
 
@@ -236,11 +240,12 @@ if(limit > 0)
             %oMain.getUpperEdge(ManipulatableImage);
 
             %Get Diagnosis for the image
-            oMain.Diagnose(surface);
+            oMain.Diagnose(surface, interface);
 
             %Crop the sharpened Image
             Position(1) = Position(1) + 1;
-            ManipulatableImage = imcrop(AreaOfInterest, Position);
+            surface = imcrop(BWcartsurf, Position);
+            interface = imcrop(BWmiddlecart, Position);
 
 %              catch
 %              Position(1) = Position(1) + 1;
