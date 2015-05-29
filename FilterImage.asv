@@ -1,0 +1,46 @@
+function output = FilterImage(ImgRotated)
+%UNTITLED Summary of this function goes here
+%   Detailed explanation goes here
+        
+%         kernels = rktkern(27,1);
+        %Apply mean and median filter to reduce speckles
+    toFilter = imresize(ImgRotated, 0.2);
+%     ImgRotated=ImgRotated(round(x/2)+1:end,:);
+    kernels = rktkern(71,5);
+    [~,~,z] = size(kernels);
+    [x,y] = size(toFilter);
+    
+    
+    %Apply median filter to reduce speckles
+    toFilter =  medfilt2(toFilter, [round(x/150), round(y/150)]);
+    %Apply mean filter
+     h = fspecial('average', [round(x/150), round(y/150)]);
+     toFilter = filter2(h, toFilter);
+    
+    temp = zeros(x,y);
+    for(i = 1:z)
+        temp(:,:,i) = rktfilt(toFilter,kernels(:,:,i));
+    end
+
+    output = zeros(x, y);
+    for(k = 1:x)
+        for(j = 1:y)
+            if(output(k, j) < max(temp(k,j,:)))
+                output(k, j) = max(temp(k,j,:));
+            end
+        end
+    end
+    
+    output= edge(output, 'sobel', [3,3], 'horizontal');
+    output = mat2gray(output);
+    
+    [rowsA colsA numberOfColorChannelsA] = size(ImgRotated); 
+    % Get size of existing image B. 
+    [rowsB colsB numberOfColorChannelsB] = size(output); 
+    % See if lateral sizes match. 
+    if rowsB ~= rowsA || colsA ~= colsB 
+        % Size of B does not match A, so resize B to match A's size. 
+        output = imresize(output, [rowsA colsA]);
+    end
+
+end
