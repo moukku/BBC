@@ -1,0 +1,54 @@
+function Graph = createGraph(Image)
+    [width, height] = size(Image);
+    Graph(width*height, 1) = GraphNode();
+     
+    %Set location for each node
+    for(i = 1: width)
+        for(j = 1: height)
+             Graph(i*j).location = [i, j];
+             Graph(i*j).weigh = Image(i,j);
+            %Set neighbors 
+            %Check for special cases like corners
+            if(i == 1)
+                    if(j == 1)
+                        Graph(j*i).setNeighbor(Graph((j)*(i+1)), ...
+                        Graph((j+1)*(i)),Graph((j+1)*(i+1)));
+                    elseif(j == height)
+                        Graph(j*i).setNeighbor(Graph((j)*(i+1)), ...
+                        Graph((j-1)*(i)),Graph((j-1)*(i+1)));
+                    else
+                        Graph(j*i).setNeighbor(Graph((j)*(i+1)), ...
+                        Graph((j+1)*(i)),Graph((j-1)*(i)),...
+                        Graph((j-1)*(i+1)), Graph((j+1)*(i+1)));
+                    end
+            elseif(i == width)
+                if(j == 1)
+                    Graph(j*i).setNeighbor(Graph((j)*(i-1)), ...
+                    Graph((j+1)*(i)),Graph((j+1)*(i-1)));
+                elseif(j == height)
+                    Graph(j*i).setNeighbor(Graph((j)*(i-1)), ...
+                    Graph((j-1)*(i)),Graph((j-1)*(i-1)));
+                else
+                    Graph(j*i).setNeighbor(Graph((j+1)*(i)), ...
+                    Graph((j)*(i-1)),Graph((j+1)*(i)),...
+                    Graph((j-1)*(i-1)), Graph((j+1)*(i-1)));
+                end
+            elseif(j == 1)
+                Graph(j*i).setNeighbor(Graph((j)*(i+1)), ...
+                Graph((j+1)*(i)),Graph((j+1)*(i+1)), Graph((j)*(i-1)),...
+                Graph((j+1)*(i-1)));
+            elseif(j == height)
+                Graph(j*i).setNeighbor(Graph((j)*(i+1)), ...
+                Graph((j-1)*(i)),Graph((j-1)*(i+1)), Graph((j-1)*(i-1)),...
+                Graph((j)*(i-1)));
+            else
+                Graph(j*i).setNeighbor(Graph((j)*(i-1)),...
+                Graph((j)*(i+1)), Graph((j+1)*(i)),Graph((j-1)*(i)),...
+                Graph((j+1)*(i-1)),Graph((j+1)*(i+1)),...
+                Graph((j-1)*(i+1)),Graph((j-1)*(i-1)));
+            end
+
+        
+        end
+    end
+end
